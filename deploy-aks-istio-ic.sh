@@ -16,6 +16,7 @@ az network vnet create \
 
 AKS_SUBNET_ID=$(az network vnet subnet show --resource-group ${RESOURCE_GROUP} --vnet-name ${AKS_VNET_NAME} --name ${AKS_SUBNET_NAME} --query id -o tsv)
 
+# create AKS Cluster using kubenet, Azure CNI does not seem to work with the Istio Ingress Gateway - can complete setup, but tests fail.
 az aks create \
 --resource-group ${RESOURCE_GROUP} \
 --name ${CLUSTER} \
@@ -126,5 +127,24 @@ curl -s -I -HHost:httpbin.example.com "http://$INGRESS_HOST:$INGRESS_PORT/status
 # change the YAML to annotated the Load Balancer to be internal https://istio.io/latest/docs/setup/additional-setup/gateway/
 kubectl apply -f install-istio-gateway-int-lb.yaml
 
-# log on to jumpbox to test using the internal IP
+# peer AKS vnet with hub vnet, and log on to jumpbox to test using the internal IP
+export INGRESS_HOST=$(kubectl -n "$INGRESS_NS" get service "$INGRESS_NAME" -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+export INGRESS_PORT=$(kubectl -n "$INGRESS_NS" get service "$INGRESS_NAME" -o jsonpath='{.spec.ports[?(@.name=="http")].port}')
+export SECURE_INGRESS_PORT=$(kubectl -n "$INGRESS_NS" get service "$INGRESS_NAME" -o jsonpath='{.spec.ports[?(@.name=="https")].port}')
+export TCP_INGRESS_PORT=$(kubectl -n "$INGRESS_NS" get service "$INGRESS_NAME" -o jsonpath='{.spec.ports[?(@.name=="tcp")].port}')
 
+curl -s -I -HHost:httpbin.example.com "http://$INGRESS_HOST:$INGRESS_PORT/status/200"
+
+# Expect response:
+# HTTP/1.1 200 OK
+# server: istio-envoy
+# date: Tue, 16 May 2023 02:07:25 GMT
+# content-type: text/html; charset=utf-8
+# access-control-allow-origin: *
+# access-control-allow-credentials: true
+# content-length: 0
+# x-envoy-upstream-service-time: 2
+
+
+## TODO #1: Connect App Gatewayw/ WAF v@ to it - using the internal LB IP as backend pool
+## TODO #2: create ReadMe.md
