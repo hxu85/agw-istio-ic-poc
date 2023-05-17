@@ -148,3 +148,42 @@ curl -s -I -HHost:httpbin.example.com "http://$INGRESS_HOST:$INGRESS_PORT/status
 
 ## TODO #1: Connect App Gatewayw/ WAF v@ to it - using the internal LB IP as backend pool
 ## TODO #2: create ReadMe.md
+
+# deploy and configure bookinfo app on the httpbin-gateway
+
+#deploy sample application from istio
+kubectl apply -f https://raw.githubusercontent.com/istio/istio/release-1.17/samples/bookinfo/platform/kube/bookinfo.yaml
+
+#configure routing on gateway
+kubectl apply -f - <<EOF
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: bookinfo-vs-internal
+spec:
+  hosts:
+  - "*"
+  gateways:
+  - httpbin-gateway
+  http:
+  - match:
+    - uri:
+        exact: /productpage
+    - uri:
+        prefix: /static
+    - uri:
+        exact: /login
+    - uri:
+        exact: /logout
+    - uri:
+        prefix: /api/v1/products
+    route:
+    - destination:
+        host: productpage
+        port:
+          number: 9080
+EOF
+
+# test the application on a jumpbox in hub vNet using curl or browser http://<internal lb ip>:80/productpage
+
+## Configure App Gateway to pass through all traffic to the Istio Ingress Gateway by using the internal lb IP as backend pool
